@@ -11,7 +11,7 @@
 #include <arpa/inet.h>
 
 #include "network.h"
-
+//no reason
 
 // global variable; can't be avoided because
 // of asynchronous signal interaction
