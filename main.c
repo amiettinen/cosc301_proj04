@@ -20,6 +20,16 @@ void signal_handler(int sig) {
     still_running = FALSE;
 }
 
+pthread_mutex_t mutex;
+pthread_mutex_init(&mutex,NULL); 
+//Will need to lock mutex around the job queue manipulation
+
+//struct node * head = NULL;
+//struct node * tail = NULL;
+list_t* job_list;
+list_init(job_list);
+
+FILE * weblog;
 
 void usage(const char *progname) {
     fprintf(stderr, "usage: %s [-p port] [-t numthreads]\n", progname);
@@ -28,13 +38,56 @@ void usage(const char *progname) {
     exit(0);
 }
 
+void worker_function( int sock ){
+  pthread_mutex_lock(&(job_list->lock));
+  // This pthread is now busy... I'll need to indicate that somehow?
+  char* reqbuffer =(char*) malloc(sizeof(char* 128));
+  int buffsize = 128;
+  int getreq = getrequest( sock, reqbuffer, buffsize);
+  int bytes_written = 0;
+  if (getreq < 0){
+    fprintf(stderr,"Had no request in poll, not sure how to deal with this./n");
+  }
+  else{
+    struct stat file_stat;
+    int file_size;
+    if(stat(reqbuffer,&file_stat)<0){
+      ////////////////      404 error
+      senddata(sock, HTTP_404, strlen(HTTP_404));
+      //write out http 404 error
+      //write to log an http error
+    }
+    else{
+
+    file_size = file_stat.st_size;
+    bytes_written = (sock, reqbuffer, buffsize);
+
+
+    //write out file output
+    //write to log request and size
+
+    }
+  }
+  pthread_mutex_unlock(&(job_list->lock));
+}
+
 void runserver(int numthreads, unsigned short serverport) {
     //////////////////////////////////////////////////
 
-    // create your pool of threads here
+    // create your pool of threads here - use 10 threads
 
-    //////////////////////////////////////////////////
-    
+  pthread_t * thread_arr =(pthread_t *) malloc(sizeof(pthread_t)*numthreads); 
+  int iterate = 0;
+  while(iterate < numthreads){
+    pthread_t newthread;
+    if(pthread_create(&newthread, worker_function, NULL, NULL) < 0){
+      fprintf(stderr, "pthread create failed!\n");
+    }
+    *(thread_arr+iterate) = newthread;
+    iterate +=1 ;
+  }
+  
+    ///////////////////////////////////////////////
     
     int main_socket = prepare_server_socket(serverport);
     if (main_socket < 0) {
@@ -76,6 +129,16 @@ void runserver(int numthreads, unsigned short serverport) {
             * when you're done.
             */
            ////////////////////////////////////////////////////////
+	    weblog = fopen("weblog.txt", "w");
+	    if (weblog == NULL)
+	      {
+		printf("Error opening file!\n");
+		exit(1);
+	      }
+
+	    // Find free pthread, give it request to manipulate in worker function
+	    // In worker thread, call shut_down() on sock.
+	    head = add_head(head, new_sock); //add sock to job queue
 
 
         }
