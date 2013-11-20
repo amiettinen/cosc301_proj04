@@ -11,7 +11,7 @@
 #include <arpa/inet.h>
 
 #include "network.h"
-//no reason
+
 
 // global variable; can't be avoided because
 // of asynchronous signal interaction
@@ -31,6 +31,11 @@ list_init(job_list);
 
 FILE * weblog;
 
+pthread_cond_t signal;
+pthread_cond_init(signal);
+
+int test = 0;
+
 void usage(const char *progname) {
     fprintf(stderr, "usage: %s [-p port] [-t numthreads]\n", progname);
     fprintf(stderr, "\tport number defaults to 3000 if not specified.\n");
@@ -39,29 +44,39 @@ void usage(const char *progname) {
 }
 
 void worker_function( int sock ){
-  pthread_mutex_lock(&(job_list->lock));
-  // This pthread is now busy... I'll need to indicate that somehow?
   char* reqbuffer =(char*) malloc(sizeof(char* 128));
   int buffsize = 128;
-  int getreq = getrequest( sock, reqbuffer, buffsize);
-  int bytes_written = 0;
+  int getreq;
+  int bytes_written;
+  int file_size;
+  FILE * readme;
+  while(1){
+  pthread_mutex_lock(&(job_list->lock));
+  // This pthread is now busy... I'll need to indicate that somehow?
+  while(test==0){
+    pthread_cond_wait(signal);
+  }
+  test = 0;
+
+  getreq = getrequest( sock, reqbuffer, buffsize);
+  bytes_written = 0;
   if (getreq < 0){
     fprintf(stderr,"Had no request in poll, not sure how to deal with this./n");
   }
   else{
     struct stat file_stat;
-    int file_size;
+
     if(stat(reqbuffer,&file_stat)<0){
-      ////////////////      404 error
       senddata(sock, HTTP_404, strlen(HTTP_404));
-      //write out http 404 error
+
       //write to log an http error
     }
     else{
-
-    file_size = file_stat.st_size;
-    bytes_written = (sock, reqbuffer, buffsize);
-
+      readme = fopen(reqbuffer,'r');
+      file_size = file_stat.st_size;
+      bytes_written = (sock, reqbuffer, buffsize);
+      char * file_buffer = (char*) malloc (sizeof(char)*1024);
+      
 
     //write out file output
     //write to log request and size
@@ -70,17 +85,24 @@ void worker_function( int sock ){
   }
   pthread_mutex_unlock(&(job_list->lock));
 }
+}
 
 void runserver(int numthreads, unsigned short serverport) {
     //////////////////////////////////////////////////
 
     // create your pool of threads here - use 10 threads
+  weblog = fopen("weblog.txt", "w");
+  if (weblog == NULL)
+    {
+      printf("Error opening file!\n");
+      exit(1);
+    }
 
   pthread_t * thread_arr =(pthread_t *) malloc(sizeof(pthread_t)*numthreads); 
   int iterate = 0;
   while(iterate < numthreads){
     pthread_t newthread;
-    if(pthread_create(&newthread, worker_function, NULL, NULL) < 0){
+    if(pthread_create(&newthread,NULL, worker_function, NULL) < 0){
       fprintf(stderr, "pthread create failed!\n");
     }
     *(thread_arr+iterate) = newthread;
@@ -117,7 +139,7 @@ void runserver(int numthreads, unsigned short serverport) {
         int new_sock = accept(main_socket, (struct sockaddr *)&client_address, &addr_len);
         if (new_sock > 0) {
             
-            time_t now = time(NULL);
+             time_t now = time(NULL);
             fprintf(stderr, "Got connection from %s:%d at %s\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port), ctime(&now));
 
            ////////////////////////////////////////////////////////
@@ -129,17 +151,15 @@ void runserver(int numthreads, unsigned short serverport) {
             * when you're done.
             */
            ////////////////////////////////////////////////////////
-	    weblog = fopen("weblog.txt", "w");
-	    if (weblog == NULL)
-	      {
-		printf("Error opening file!\n");
-		exit(1);
-	      }
 
-	    // Find free pthread, give it request to manipulate in worker function
+
+
 	    // In worker thread, call shut_down() on sock.
+	    pthread_mutex_lock(*(job_list->lock));
 	    head = add_head(head, new_sock); //add sock to job queue
-
+	    pthread_cond_signal(signal);
+	    test = 1;
+	    pthread_mutex_unlock(*(job_list->lock));
 
         }
     }
