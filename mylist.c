@@ -64,26 +64,20 @@ void print_ll( list_t * list){
    pthread_mutex_unlock(&(list-> lock));
 }   
 
-int get_socket( list_t * list){
+void * pop_head( list_t * list){
    pthread_mutex_lock(&(list-> lock));
    struct node * tmp = list -> head ; 
    if ( tmp == NULL){
-     return NULL; 
+     return NULL ; 
    }else{
      struct node * tmp_next = tmp -> next ;
      list -> head = tmp_next ;
-     return tmp -> socket ; 
+     return (void * )tmp -> socket ; 
    }
-   
-
-
+ 
   pthread_mutex_unlock(&(list-> lock));
 }
 int main (){
-  list_t job_list ;
-  list_init(& job_list);
-  add_head( &job_list, 1);
-  add_head(&job_list, 2);
-  print_ll(&job_list);
+
   return 0 ;
 }
