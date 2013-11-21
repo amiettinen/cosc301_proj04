@@ -42,10 +42,11 @@ void add_head ( list_t * list, int sock){
     list-> head = new_node ;
   }
   pthread_mutex_unlock(&(list-> lock));
+  return ; 
 }
 
 void * pop_head( list_t * list){
-  pthread_mutex_lock(&(list-> lock));
+  //  pthread_mutex_lock(&(list-> lock));
   struct node * tmp = list -> head ;
   if ( tmp == NULL){
     return NULL ;
@@ -55,7 +56,7 @@ void * pop_head( list_t * list){
     return (void * )&(tmp -> socket );
   }
 
-  pthread_mutex_unlock(&(list-> lock));
+  //  pthread_mutex_unlock(&(list-> lock));
 }
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -205,13 +206,17 @@ void runserver(int numthreads, unsigned short serverport) {
            ////////////////////////////////////////////////////////
 
 
-
+	    printf("\nbefore lock \n");
 	    // In worker thread, call shut_down() on sock.
-	    pthread_mutex_lock(&(job_list->lock));
+
+
+
 	    add_head(job_list, new_sock); //add sock to job queue
+
+    	    printf("\n %d \n", job_list -> head -> socket);
 	    pthread_cond_signal(&(job_list->signal));
 	    test = 1;
-	    pthread_mutex_unlock(&(job_list->lock));
+
 
         }
     }
