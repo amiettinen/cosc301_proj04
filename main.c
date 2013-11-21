@@ -20,19 +20,19 @@ void signal_handler(int sig) {
     still_running = FALSE;
 }
 
-pthread_mutex_t mutex;
-pthread_mutex_init(&mutex,NULL); 
+
 //Will need to lock mutex around the job queue manipulation
 
 //struct node * head = NULL;
 //struct node * tail = NULL;
-list_t* job_list;
-list_init(job_list);
+list_t jobs; 
+list_t* job_list= &jobs;
+//list_init(job_list);
 
 FILE * weblog;
 
-pthread_cond_t signal;
-pthread_cond_init(signal);
+//pthread_cond_t signal;
+//pthread_cond_init(signal);
 
 int test = 0;
 
@@ -43,21 +43,25 @@ void usage(const char *progname) {
     exit(0);
 }
 
-void worker_function( int sock ){
-  char* reqbuffer =(char*) malloc(sizeof(char* 128));
-  int buffsize = 128;
+void * worker_function( void * arg){
+  char* reqbuffer =(char *) malloc(sizeof(char) *1024);
+  int buffsize = 1024;
   int getreq;
   int bytes_written;
   int file_size;
   FILE * readme;
+  //  list_t * job_list = (list_t*) arg; 
   while(1){
+  
+
   pthread_mutex_lock(&(job_list->lock));
   // This pthread is now busy... I'll need to indicate that somehow?
   while(test==0){
-    pthread_cond_wait(signal);
+    pthread_cond_wait(&(job_list->signal),&(job_list->lock));
   }
   test = 0;
 
+  int sock = * (int *)pop_head( job_list);
   getreq = getrequest( sock, reqbuffer, buffsize);
   bytes_written = 0;
   if (getreq < 0){
@@ -72,17 +76,18 @@ void worker_function( int sock ){
       //write to log an http error
     }
     else{
-      readme = fopen(reqbuffer,'r');
+      readme = fopen(reqbuffer,"r");
       file_size = file_stat.st_size;
-      bytes_written = (sock, reqbuffer, buffsize);
-      char * file_buffer = (char*) malloc (sizeof(char)*1024);
       
-
+      //      char * file_buffer = (char*) malloc (sizeof(char)*1024);
+      
+    bytes_written = senddata(sock, reqbuffer, buffsize);
     //write out file output
     //write to log request and size
 
     }
   }
+  close(sock); 
   pthread_mutex_unlock(&(job_list->lock));
 }
 }
@@ -102,7 +107,7 @@ void runserver(int numthreads, unsigned short serverport) {
   int iterate = 0;
   while(iterate < numthreads){
     pthread_t newthread;
-    if(pthread_create(&newthread,NULL, worker_function, NULL) < 0){
+    if(pthread_create(&newthread,NULL, worker_function,job_list) < 0){
       fprintf(stderr, "pthread create failed!\n");
     }
     *(thread_arr+iterate) = newthread;
@@ -155,21 +160,33 @@ void runserver(int numthreads, unsigned short serverport) {
 
 
 	    // In worker thread, call shut_down() on sock.
-	    pthread_mutex_lock(*(job_list->lock));
-	    head = add_head(head, new_sock); //add sock to job queue
-	    pthread_cond_signal(signal);
+	    pthread_mutex_lock(&(job_list->lock));
+	    add_head(job_list, new_sock); //add sock to job queue
+	    pthread_cond_signal(&(job_list->signal));
 	    test = 1;
-	    pthread_mutex_unlock(*(job_list->lock));
+	    pthread_mutex_unlock(&(job_list->lock));
 
         }
     }
-    fprintf(stderr, "Server shutting down.\n");
+
+  iterate = 0;
+  pthread_t kill_me ; 
+  while(iterate < numthreads){
         
+    kill_me = *(thread_arr+iterate) ;
+    pthread_join(kill_me, NULL); 
+    iterate +=1 ;
+  }
+
+    fprintf(stderr, "Server shutting down.\n");
+    fclose(weblog);        
     close(main_socket);
+
 }
 
 
 int main(int argc, char **argv) {
+    list_init(job_list);
     unsigned short port = 3000;
     int num_threads = 1;
 
