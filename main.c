@@ -97,7 +97,10 @@ void * worker_function( void * arg){
   int bytes_written;
   int file_size;
   FILE * readme;
-  //  list_t * job_list = (list_t*) arg; 
+  //for logging
+  struct sockaddr_in client_address;
+  socklen_t addr_len;
+
   while(1){
   
     printf("\nafter while before lock\n");
@@ -107,12 +110,16 @@ void * worker_function( void * arg){
     pthread_cond_wait(&(job_list->signal),&(job_list->lock));
   }
   test = 0;
-
+   
+   //before sock 
   int sock = * ((int *)pop_head( job_list));
+  //after sock 
+  
   getreq = getrequest( sock, reqbuffer, buffsize);
   //  printf("\n%s\n", reqbuffer);
   bytes_written = 0;
   if (getreq < 0){
+    
     fprintf(stderr,"Had no request in poll, not sure how to deal with this./n");
   }
   else{
@@ -120,6 +127,9 @@ void * worker_function( void * arg){
 
     if(stat(reqbuffer,&file_stat)<0){
       senddata(sock, HTTP_404, strlen(HTTP_404));
+                    
+      time_t now = time(NULL);
+      fprintf(weblog, "%s:%d at %s %s 404 %zd\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port),ctime(&now),reqbuffer,strlen(HTTP_404));
 
       //write to log an http error
     }
