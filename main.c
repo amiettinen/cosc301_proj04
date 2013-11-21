@@ -136,10 +136,19 @@ void * worker_function( void * arg){
     else{
       readme = fopen(reqbuffer,"r");
       file_size = file_stat.st_size;
+      char * line  = (char*) malloc (sizeof(char)*1024);
+      char * content  = (char*) malloc (sizeof(char)*4096);
+      content [0]='\0'; 
+      //add all the contents of the file to the variable content 
+      while (fgets( line, 1024, readme)){
+	strcat(content,line ) ;
+	}
       
-      //      char * file_buffer = (char*) malloc (sizeof(char)*1024);
+
       
-    bytes_written = senddata(sock, reqbuffer, buffsize);
+      char * to_send =  (char*) malloc (sizeof(char)*4096);
+      sprintf( to_send, "HTTP/1.1 200 OK\r\n Content-Type: text/html\r\n Content-length: %d\r\n \r\n%s",file_size,content); 
+      bytes_written = senddata(sock, to_send, strlen(to_send));
     printf("\n%s\n", reqbuffer);
     //write out file output
     //write to log request and size
