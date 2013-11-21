@@ -99,7 +99,7 @@ void * worker_function( void * arg){
   FILE * readme;
   //for logging
   struct sockaddr_in client_address;
-  socklen_t addr_len;
+  //  socklen_t addr_len;
 
   while(1){
   
@@ -127,11 +127,11 @@ void * worker_function( void * arg){
 
     if(stat(reqbuffer,&file_stat)<0){
       senddata(sock, HTTP_404, strlen(HTTP_404));
-                    
+      //write 404 error to log
       time_t now = time(NULL);
-      fprintf(weblog, "%s:%d at %s %s 404 %zd\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port),ctime(&now),reqbuffer,strlen(HTTP_404));
+      fprintf(weblog, "%s:%d at %s GET  %s 404 %zd\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port),ctime(&now),reqbuffer,strlen(HTTP_404));
 
-      //write to log an http error
+  
     }
     else{
       readme = fopen(reqbuffer,"r");
@@ -143,19 +143,22 @@ void * worker_function( void * arg){
       while (fgets( line, 1024, readme)){
 	strcat(content,line ) ;
 	}
-      
-
-      
+      //format string for send data
       char * to_send =  (char*) malloc (sizeof(char)*4096);
       sprintf( to_send, "HTTP/1.1 200 OK\r\n Content-Type: text/html\r\n Content-length: %d\r\n \r\n%s",file_size,content); 
+      //send data
       bytes_written = senddata(sock, to_send, strlen(to_send));
     printf("\n%s\n", reqbuffer);
-    //write out file output
-    //write to log request and size
+      //write to log request and size
+      time_t now = time(NULL);
+      fprintf(weblog, "%s:%d at %s GET %s 200 %zd\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port),ctime(&now),reqbuffer,strlen(to_send));
+
 
     }
   }
   close(sock); 
+  fclose(readme);
+  
   pthread_mutex_unlock(&(job_list->lock));
 }
 }
@@ -183,7 +186,7 @@ void runserver(int numthreads, unsigned short serverport) {
   }
   
     ///////////////////////////////////////////////
-        int main_socket = prepare_server_socket(serverport);
+     int main_socket = prepare_server_socket(serverport);
     if (main_socket < 0) {
         exit(-1);
     }
