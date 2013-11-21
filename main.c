@@ -9,9 +9,55 @@
 #include <signal.h>
 #include <sys/stat.h>
 #include <arpa/inet.h>
-
+#include <assert.h>
 #include "network.h"
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+void list_init(list_t *list){
+  list-> head = NULL;
 
+  int rc = pthread_mutex_init(&(list->lock),NULL);
+  assert(rc== 0);
+  pthread_cond_init(&(list -> signal) ,NULL );
+
+
+}
+
+void add_head ( list_t * list, int sock){
+  pthread_mutex_lock(&(list-> lock));
+
+  struct node * new_node = (struct node * ) malloc(sizeof(struct node));
+  new_node -> socket = sock;
+  if (! new_node){
+    printf("\n Didn' malloc\n");
+    abort();
+  }
+
+  struct node * tmp =  list -> head  ;
+  if ( tmp !=NULL ){
+    new_node -> next  = tmp ;
+    list-> head  = new_node ;
+    new_node -> next = tmp ;
+  }else{
+    new_node ->next = NULL;
+    list-> head = new_node ;
+  }
+  pthread_mutex_unlock(&(list-> lock));
+}
+
+void * pop_head( list_t * list){
+  pthread_mutex_lock(&(list-> lock));
+  struct node * tmp = list -> head ;
+  if ( tmp == NULL){
+    return NULL ;
+  }else{
+    struct node * tmp_next = tmp -> next ;
+    list -> head = tmp_next ;
+    return (void * )&(tmp -> socket );
+  }
+
+  pthread_mutex_unlock(&(list-> lock));
+}
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 // global variable; can't be avoided because
 // of asynchronous signal interaction
@@ -53,7 +99,7 @@ void * worker_function( void * arg){
   //  list_t * job_list = (list_t*) arg; 
   while(1){
   
-
+    printf("\nafter while before lock\n");
   pthread_mutex_lock(&(job_list->lock));
   // This pthread is now busy... I'll need to indicate that somehow?
   while(test==0){
@@ -61,8 +107,9 @@ void * worker_function( void * arg){
   }
   test = 0;
 
-  int sock = * (int *)pop_head( job_list);
+  int sock = * ((int *)pop_head( job_list));
   getreq = getrequest( sock, reqbuffer, buffsize);
+  //  printf("\n%s\n", reqbuffer);
   bytes_written = 0;
   if (getreq < 0){
     fprintf(stderr,"Had no request in poll, not sure how to deal with this./n");
@@ -82,6 +129,7 @@ void * worker_function( void * arg){
       //      char * file_buffer = (char*) malloc (sizeof(char)*1024);
       
     bytes_written = senddata(sock, reqbuffer, buffsize);
+    printf("\n%s\n", reqbuffer);
     //write out file output
     //write to log request and size
 
@@ -115,8 +163,7 @@ void runserver(int numthreads, unsigned short serverport) {
   }
   
     ///////////////////////////////////////////////
-    
-    int main_socket = prepare_server_socket(serverport);
+        int main_socket = prepare_server_socket(serverport);
     if (main_socket < 0) {
         exit(-1);
     }
